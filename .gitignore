@@ -31,13 +31,9 @@ $RECYCLE.BIN/
 # Thumbnails
 ._*
 
-# Files that might appear in the root of a volume
-.DocumentRevisions-V100
-.fseventsd
+# Files that might appear on external disk
 .Spotlight-V100
-.TemporaryItems
 .Trashes
-.VolumeIcon.icns
 
 # Directories potentially created on remote AFP share
 .AppleDB
@@ -45,3 +41,38 @@ $RECYCLE.BIN/
 Network Trash Folder
 Temporary Items
 .apdisk
+
+
+# =========================
+# Project Special Files
+# =========================
+
+*.pdb
+*.v12.suo
+*.psess
+*/obj
+
+# Result files
+*/bin
+*/Publish
+*.dll
+*.zip
+
+Packages
+
+# Some way too meaningless or dead projects
+DataAcdUnpack/*
+Kn5Pack/*
+Kn5Unpack/*
+*.suo
+
+# Specific unnecessary source files
+AcManager/Assets/Data/ShowroomPreviewSphere/*
+AcManager/Assets/Data/TrackPreviewNothing/*
+AcTools.marker.tss
+AcTools.tss
+
+# RAM Disk trick
+*/bin~
+*/obj~
+*.tmp_proj
