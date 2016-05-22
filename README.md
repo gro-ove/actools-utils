@@ -14,6 +14,15 @@ Some utils and obsolete libraries from [AcTools](https://github.com/gro-ove/acto
 - ### [Kn5Materials](https://github.com/gro-ove/actools-utils/tree/master/Kn5Materials)
     Simple Windows Forms app to view/edit material properties of any kn5 file.
 
+- ### [AiOptimizer](https://github.com/gro-ove/actools-utils/tree/master/AiOptimizer)
+    Some attempt to optimize values from ai.ini using genetics mechanism.
+
+- ### [DataAnalyzer](https://github.com/gro-ove/actools-utils/tree/master/DataAnalyzer)
+    Analyzes car's data to find similar solutions using sets of rules.
+
+- ### [DataCollector](https://github.com/gro-ove/actools-utils/tree/master/DataCollector)
+    Collects specific fields from car's data to help to find some regularities.
+
 - ### [AcToolsShowroom](https://github.com/gro-ove/actools-utils/tree/master/AcToolsShowroom)
     Just a small wrapper for AcTools.Kn5Render.
 
