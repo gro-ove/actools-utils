@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -6,7 +8,7 @@ using System.Runtime.InteropServices;
 namespace Kn5Materials {
     public class DDSImage {
         #region Variables
-        private System.Drawing.Bitmap m_bitmap = null;
+        private Bitmap _bitmap;
         #endregion
 
         #region Constructor/Destructor
@@ -14,12 +16,12 @@ namespace Kn5Materials {
             if (ddsImage == null) return;
             if (ddsImage.Length == 0) return;
 
-            using (MemoryStream stream = new MemoryStream(ddsImage.Length)) {
+            using (var stream = new MemoryStream(ddsImage.Length)) {
                 stream.Write(ddsImage, 0, ddsImage.Length);
                 stream.Seek(0, SeekOrigin.Begin);
 
-                using (BinaryReader reader = new BinaryReader(stream)) {
-                    this.Parse(reader);
+                using (var reader = new BinaryReader(stream)) {
+                    Parse(reader);
                 }
             }
         }
@@ -28,8 +30,8 @@ namespace Kn5Materials {
             if (ddsImage == null) return;
             if (!ddsImage.CanRead) return;
 
-            using (BinaryReader reader = new BinaryReader(ddsImage)) {
-                this.Parse(reader);
+            using (var reader = new BinaryReader(ddsImage)) {
+                Parse(reader);
             }
         }
         #endregion
@@ -39,24 +41,24 @@ namespace Kn5Materials {
 
         #region Private Methods
         private void Parse(BinaryReader reader) {
-            DDSStruct header = new DDSStruct();
-            PixelFormat pixelFormat = PixelFormat.UNKNOWN;
+            var header = new DDSStruct();
+            var pixelFormat = PixelFormat.UNKNOWN;
             byte[] data = null;
 
-            if (this.ReadHeader(reader, ref header)) {
+            if (ReadHeader(reader, ref header)) {
                 // patches for stuff
                 if (header.depth == 0) header.depth = 1;
 
                 uint blocksize = 0;
-                pixelFormat = this.GetFormat(header, ref blocksize);
+                pixelFormat = GetFormat(header, ref blocksize);
                 if (pixelFormat == PixelFormat.UNKNOWN) {
                     throw new InvalidFileHeaderException();
                 }
 
-                data = this.ReadData(reader, header);
+                data = ReadData(reader, header);
                 if (data != null) {
-                    byte[] rawData = this.DecompressData(header, data, pixelFormat);
-                    this.m_bitmap = this.CreateBitmap((int)header.width, (int)header.height, rawData);
+                    var rawData = DecompressData(header, data, pixelFormat);
+                    _bitmap = CreateBitmap((int)header.width, (int)header.height, rawData);
                 }
             }
         }
@@ -69,15 +71,15 @@ namespace Kn5Materials {
                 compdata = reader.ReadBytes((int)header.sizeorpitch);
                 compsize = (uint)compdata.Length;
             } else {
-                uint bps = header.width * header.pixelformat.rgbbitcount / 8;
+                var bps = header.width * header.pixelformat.rgbbitcount / 8;
                 compsize = bps * header.height * header.depth;
                 compdata = new byte[compsize];
 
-                MemoryStream mem = new MemoryStream((int)compsize);
+                var mem = new MemoryStream((int)compsize);
 
                 byte[] temp;
-                for (int z = 0; z < header.depth; z++) {
-                    for (int y = 0; y < header.height; y++) {
+                for (var z = 0; z < header.depth; z++) {
+                    for (var y = 0; y < header.height; y++) {
                         temp = reader.ReadBytes((int)bps);
                         mem.Write(temp, 0, temp.Length);
                     }
@@ -91,17 +93,17 @@ namespace Kn5Materials {
             return compdata;
         }
 
-        private System.Drawing.Bitmap CreateBitmap(int width, int height, byte[] rawData) {
-            System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        private Bitmap CreateBitmap(int width, int height, byte[] rawData) {
+            var bitmap = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
 
-            BitmapData data = bitmap.LockBits(new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height)
+            var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height)
                 , ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-            IntPtr scan = data.Scan0;
-            int size = bitmap.Width * bitmap.Height * 4;
+            var scan = data.Scan0;
+            var size = bitmap.Width * bitmap.Height * 4;
 
             unsafe {
-                byte* p = (byte*)scan;
-                for (int i = 0; i < size; i += 4) {
+                var p = (byte*)scan;
+                for (var i = 0; i < size; i += 4) {
                     // iterate through bytes.
                     // Bitmap stores it's data in RGBA order.
                     // DDS stores it's data in BGRA order.
@@ -117,7 +119,7 @@ namespace Kn5Materials {
         }
 
         private bool ReadHeader(BinaryReader reader, ref DDSStruct header) {
-            byte[] signature = reader.ReadBytes(4);
+            var signature = reader.ReadBytes(4);
             if (!(signature[0] == 'D' && signature[1] == 'D' && signature[2] == 'S' && signature[3] == ' '))
                 return false;
 
@@ -135,7 +137,7 @@ namespace Kn5Materials {
             header.alphabitdepth = reader.ReadUInt32();
 
             header.reserved = new uint[10];
-            for (int i = 0; i < 10; i++) {
+            for (var i = 0; i < 10; i++) {
                 header.reserved[i] = reader.ReadUInt32();
             }
 
@@ -160,7 +162,7 @@ namespace Kn5Materials {
         }
 
         private PixelFormat GetFormat(DDSStruct header, ref uint blocksize) {
-            PixelFormat format = PixelFormat.UNKNOWN;
+            var format = PixelFormat.UNKNOWN;
             if ((header.pixelformat.flags & DDPF_FOURCC) == DDPF_FOURCC) {
                 blocksize = ((header.width + 3) / 4) * ((header.height + 3) / 4) * header.depth;
 
@@ -329,8 +331,8 @@ namespace Kn5Materials {
                 && header.pixelformat.alphabitmask == 0xC0000000)
                 return true;
             // a2r10g10b10 format
-            else if (header.pixelformat.rbitmask == 0x000003FF && header.pixelformat.gbitmask == 0x000FFC00 && header.pixelformat.bbitmask == 0x3FF00000
-                && header.pixelformat.alphabitmask == 0xC0000000)
+            if (header.pixelformat.rbitmask == 0x000003FF && header.pixelformat.gbitmask == 0x000FFC00 && header.pixelformat.bbitmask == 0x3FF00000
+                    && header.pixelformat.alphabitmask == 0xC0000000)
                 return true;
 
             return false;
@@ -338,11 +340,11 @@ namespace Kn5Materials {
 
         private void CorrectPremult(uint pixnum, ref byte[] buffer) {
             for (uint i = 0; i < pixnum; i++) {
-                byte alpha = buffer[i + 3];
+                var alpha = buffer[i + 3];
                 if (alpha == 0) continue;
-                int red = (buffer[i] << 8) / alpha;
-                int green = (buffer[i + 1] << 8) / alpha;
-                int blue = (buffer[i + 2] << 8) / alpha;
+                var red = (buffer[i] << 8) / alpha;
+                var green = (buffer[i + 1] << 8) / alpha;
+                var blue = (buffer[i + 2] << 8) / alpha;
 
                 buffer[i] = (byte)red;
                 buffer[i + 1] = (byte)green;
@@ -369,15 +371,13 @@ namespace Kn5Materials {
         }
 
         private unsafe void DxtcReadColors(byte* data, ref Colour8888[] op) {
-            byte r0, g0, b0, r1, g1, b1;
+            var b0 = (byte)(data[0] & 0x1F);
+            var g0 = (byte)(((data[0] & 0xE0) >> 5) | ((data[1] & 0x7) << 3));
+            var r0 = (byte)((data[1] & 0xF8) >> 3);
 
-            b0 = (byte)(data[0] & 0x1F);
-            g0 = (byte)(((data[0] & 0xE0) >> 5) | ((data[1] & 0x7) << 3));
-            r0 = (byte)((data[1] & 0xF8) >> 3);
-
-            b1 = (byte)(data[2] & 0x1F);
-            g1 = (byte)(((data[2] & 0xE0) >> 5) | ((data[3] & 0x7) << 3));
-            r1 = (byte)((data[3] & 0xF8) >> 3);
+            var b1 = (byte)(data[2] & 0x1F);
+            var g1 = (byte)(((data[2] & 0xE0) >> 5) | ((data[3] & 0x7) << 3));
+            var r1 = (byte)((data[3] & 0xF8) >> 3);
 
             op[0].red = (byte)(r0 << 3 | r0 >> 2);
             op[0].green = (byte)(g0 << 2 | g0 >> 3);
@@ -389,36 +389,34 @@ namespace Kn5Materials {
         }
 
         private void DxtcReadColor(ushort data, ref Colour8888 op) {
-            byte r, g, b;
-
-            b = (byte)(data & 0x1f);
-            g = (byte)((data & 0x7E0) >> 5);
-            r = (byte)((data & 0xF800) >> 11);
+            var b = (byte)(data & 0x1f);
+            var g = (byte)((data & 0x7E0) >> 5);
+            var r = (byte)((data & 0xF800) >> 11);
 
             op.red = (byte)(r << 3 | r >> 2);
             op.green = (byte)(g << 2 | g >> 3);
             op.blue = (byte)(b << 3 | r >> 2);
         }
 
-        private unsafe void DxtcReadColors(byte* data, ref Colour565 color_0, ref Colour565 color_1) {
-            color_0.blue = (byte)(data[0] & 0x1F);
-            color_0.green = (byte)(((data[0] & 0xE0) >> 5) | ((data[1] & 0x7) << 3));
-            color_0.red = (byte)((data[1] & 0xF8) >> 3);
+        private unsafe void DxtcReadColors(byte* data, ref Colour565 color0, ref Colour565 color1) {
+            color0.blue = (byte)(data[0] & 0x1F);
+            color0.green = (byte)(((data[0] & 0xE0) >> 5) | ((data[1] & 0x7) << 3));
+            color0.red = (byte)((data[1] & 0xF8) >> 3);
 
-            color_0.blue = (byte)(data[2] & 0x1F);
-            color_0.green = (byte)(((data[2] & 0xE0) >> 5) | ((data[3] & 0x7) << 3));
-            color_0.red = (byte)((data[3] & 0xF8) >> 3);
+            color0.blue = (byte)(data[2] & 0x1F);
+            color0.green = (byte)(((data[2] & 0xE0) >> 5) | ((data[3] & 0x7) << 3));
+            color0.red = (byte)((data[3] & 0xF8) >> 3);
         }
 
         private void GetBitsFromMask(uint mask, ref uint shiftLeft, ref uint shiftRight) {
-            uint temp, i;
+            uint i;
 
             if (mask == 0) {
                 shiftLeft = shiftRight = 0;
                 return;
             }
 
-            temp = mask;
+            var temp = mask;
             for (i = 0; i < 32; i++, temp >>= 1) {
                 if ((temp & 1) != 0)
                     break;
@@ -431,14 +429,12 @@ namespace Kn5Materials {
                     break;
             }
             shiftLeft = 8 - i;
-
-            return;
         }
 
         // This function simply counts how many contiguous bits are in the mask.
         private uint CountBitsFromMask(uint mask) {
             uint i, testBit = 0x01, count = 0;
-            bool foundBit = false;
+            var foundBit = false;
 
             for (i = 0; i < 32; i++, testBit <<= 1) {
                 if ((mask & testBit) != 0) {
@@ -453,9 +449,9 @@ namespace Kn5Materials {
         }
 
         private uint HalfToFloat(ushort y) {
-            int s = (y >> 15) & 0x00000001;
-            int e = (y >> 10) & 0x0000001f;
-            int m = y & 0x000003ff;
+            var s = (y >> 15) & 0x00000001;
+            var e = (y >> 10) & 0x0000001f;
+            var m = y & 0x000003ff;
 
             if (e == 0) {
                 if (m == 0) {
@@ -463,30 +459,28 @@ namespace Kn5Materials {
                     // Plus or minus zero
                     //
                     return (uint)(s << 31);
-                } else {
-                    //
-                    // Denormalized number -- renormalize it
-                    //
-                    while ((m & 0x00000400) == 0) {
-                        m <<= 1;
-                        e -= 1;
-                    }
-
-                    e += 1;
-                    m &= ~0x00000400;
                 }
+                //
+                // Denormalized number -- renormalize it
+                //
+                while ((m & 0x00000400) == 0) {
+                    m <<= 1;
+                    e -= 1;
+                }
+
+                e += 1;
+                m &= ~0x00000400;
             } else if (e == 31) {
                 if (m == 0) {
                     //
                     // Positive or negative infinity
                     //
                     return (uint)((s << 31) | 0x7f800000);
-                } else {
-                    //
-                    // Nan -- preserve sign and significand bits
-                    //
-                    return (uint)((s << 31) | 0x7f800000 | (m << 13));
                 }
+                //
+                // Nan -- preserve sign and significand bits
+                //
+                return (uint)((s << 31) | 0x7f800000 | (m << 13));
             }
 
             //
@@ -537,54 +531,54 @@ namespace Kn5Materials {
         private byte[] DecompressData(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             Format = pixelFormat;
 
-            System.Diagnostics.Debug.WriteLine(pixelFormat);
+            Debug.WriteLine(pixelFormat);
             // allocate bitmap
-            byte[] rawData = null;
+            byte[] rawData;
 
             switch (pixelFormat) {
                 case PixelFormat.ARGB:
-                    rawData = this.DecompressRGBA(header, data, pixelFormat);
+                    rawData = DecompressRGBA(header, data, pixelFormat);
                     break;
 
                 case PixelFormat.RGB:
-                    rawData = this.DecompressRGB(header, data, pixelFormat);
+                    rawData = DecompressRGB(header, data, pixelFormat);
                     break;
 
                 case PixelFormat.LUMINANCE:
                 case PixelFormat.LUMINANCE_ALPHA:
-                    rawData = this.DecompressLum(header, data, pixelFormat);
+                    rawData = DecompressLum(header, data, pixelFormat);
                     break;
 
                 case PixelFormat.DXT1:
-                    rawData = this.DecompressDXT1(header, data, pixelFormat);
+                    rawData = DecompressDXT1(header, data, pixelFormat);
                     break;
 
                 case PixelFormat.DXT2:
-                    rawData = this.DecompressDXT2(header, data, pixelFormat);
+                    rawData = DecompressDXT2(header, data, pixelFormat);
                     break;
 
                 case PixelFormat.DXT3:
-                    rawData = this.DecompressDXT3(header, data, pixelFormat);
+                    rawData = DecompressDXT3(header, data, pixelFormat);
                     break;
 
                 case PixelFormat.DXT4:
-                    rawData = this.DecompressDXT3(header, data, pixelFormat);
+                    rawData = DecompressDXT3(header, data, pixelFormat);
                     break;
 
                 case PixelFormat.DXT5:
-                    rawData = this.DecompressDXT5(header, data, pixelFormat);
+                    rawData = DecompressDXT5(header, data, pixelFormat);
                     break;
 
                 case PixelFormat.THREEDC:
-                    rawData = this.Decompress3Dc(header, data, pixelFormat);
+                    rawData = Decompress3Dc(header, data, pixelFormat);
                     break;
 
                 case PixelFormat.ATI1N:
-                    rawData = this.DecompressAti1n(header, data, pixelFormat);
+                    rawData = DecompressAti1n(header, data, pixelFormat);
                     break;
 
                 case PixelFormat.RXGB:
-                    rawData = this.DecompressRXGB(header, data, pixelFormat);
+                    rawData = DecompressRXGB(header, data, pixelFormat);
                     break;
 
                 case PixelFormat.R16F:
@@ -593,7 +587,7 @@ namespace Kn5Materials {
                 case PixelFormat.R32F:
                 case PixelFormat.G32R32F:
                 case PixelFormat.A32B32G32R32F:
-                    rawData = this.DecompressFloat(header, data, pixelFormat);
+                    rawData = DecompressFloat(header, data, pixelFormat);
                     break;
 
                 default:
@@ -605,17 +599,17 @@ namespace Kn5Materials {
 
         private unsafe byte[] DecompressDXT1(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             // allocate bitmap
-            int bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
-            int bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
-            int sizeofplane = (int)(bps * header.height);
-            int width = (int)header.width;
-            int height = (int)header.height;
-            int depth = (int)header.depth;
+            var bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
+            var bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
+            var sizeofplane = (int)(bps * header.height);
+            var width = (int)header.width;
+            var height = (int)header.height;
+            var depth = (int)header.depth;
 
             // DXT1 decompressor
-            Colour8888[] colours = new Colour8888[4];
+            var colours = new Colour8888[4];
             Colour8888 col;
-            byte[] rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
+            var rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
 
             ushort colour0, colour1;
             uint bitmask, offset;
@@ -626,7 +620,7 @@ namespace Kn5Materials {
             colours[2].alpha = 0xFF;
 
             fixed (byte* bytePtr = data) {
-                byte* temp = bytePtr;
+                var temp = bytePtr;
                 for (z = 0; z < depth; z++) {
                     for (y = 0; y < height; y += 4) {
                         for (x = 0; x < width; x += 4) {
@@ -640,7 +634,7 @@ namespace Kn5Materials {
 
                             if (colour0 > colour1) {
                                 // Four-color block: derive the other two colors.
-                                // 00 = color_0, 01 = color_1, 10 = color_2, 11 = color_3
+                                // 00 = color0, 01 = color1, 10 = color_2, 11 = color_3
                                 // These 2-bit codes correspond to the 2-bit fields
                                 // stored in the 64-bit block.
                                 colours[2].blue = (byte)((2 * colours[0].blue + colours[1].blue + 1) / 3);
@@ -654,7 +648,7 @@ namespace Kn5Materials {
                                 colours[3].alpha = 0xFF;
                             } else {
                                 // Three-color block: derive the other color.
-                                // 00 = color_0,  01 = color_1,  10 = color_2,
+                                // 00 = color0,  01 = color1,  10 = color_2,
                                 // 11 = transparent.
                                 // These 2-bit codes correspond to the 2-bit fields 
                                 // stored in the 64-bit block. 
@@ -673,13 +667,12 @@ namespace Kn5Materials {
                                 for (i = 0; i < 4; i++, k++) {
                                     select = (int)((bitmask & (0x03 << k * 2)) >> k * 2);
                                     col = colours[select];
-                                    if (((x + i) < width) && ((y + j) < height)) {
-                                        offset = (uint)(z * sizeofplane + (y + j) * bps + (x + i) * bpp);
-                                        rawData[offset + 0] = (byte)col.red;
-                                        rawData[offset + 1] = (byte)col.green;
-                                        rawData[offset + 2] = (byte)col.blue;
-                                        rawData[offset + 3] = (byte)col.alpha;
-                                    }
+                                    if (((x + i) >= width) || ((y + j) >= height)) continue;
+                                    offset = (uint)(z * sizeofplane + (y + j) * bps + (x + i) * bpp);
+                                    rawData[offset + 0] = col.red;
+                                    rawData[offset + 1] = col.green;
+                                    rawData[offset + 2] = col.blue;
+                                    rawData[offset + 3] = col.alpha;
                                 }
                             }
                         }
@@ -692,13 +685,13 @@ namespace Kn5Materials {
 
         private byte[] DecompressDXT2(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             // allocate bitmap
-            int width = (int)header.width;
-            int height = (int)header.height;
-            int depth = (int)header.depth;
+            var width = (int)header.width;
+            var height = (int)header.height;
+            var depth = (int)header.depth;
 
             // Can do color & alpha same as dxt3, but color is pre-multiplied
             // so the result will be wrong unless corrected.
-            byte[] rawData = DecompressDXT3(header, data, pixelFormat);
+            var rawData = DecompressDXT3(header, data, pixelFormat);
             CorrectPremult((uint)(width * height * depth), ref rawData);
 
             return rawData;
@@ -706,39 +699,37 @@ namespace Kn5Materials {
 
         private unsafe byte[] DecompressDXT3(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             // allocate bitmap
-            int bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
-            int bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
-            int sizeofplane = (int)(bps * header.height);
-            int width = (int)header.width;
-            int height = (int)header.height;
-            int depth = (int)header.depth;
+            var bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
+            var bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
+            var sizeofplane = (int)(bps * header.height);
+            var width = (int)header.width;
+            var height = (int)header.height;
+            var depth = (int)header.depth;
 
             // DXT3 decompressor
-            Colour8888[] colours = new Colour8888[4];
-            byte[] rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
-
-            uint bitmask, offset;
-            int i, j, k, x, y, z, select;
-            ushort word;
-            byte* alpha; //temp;
+            var colours = new Colour8888[4];
+            var rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
 
             fixed (byte* bytePtr = data) {
-                byte* temp = bytePtr;
+                var temp = bytePtr;
 
+                int z;
                 for (z = 0; z < depth; z++) {
+                    int y;
                     for (y = 0; y < height; y += 4) {
+                        int x;
                         for (x = 0; x < width; x += 4) {
-                            alpha = temp;
+                            var alpha = temp; //temp;
                             temp += 8;
 
                             DxtcReadColors(temp, ref colours);
                             temp += 4;
 
-                            bitmask = ((uint*)temp)[1];
+                            var bitmask = ((uint*)temp)[1];
                             temp += 4;
 
                             // Four-color block: derive the other two colors.
-                            // 00 = color_0, 01 = color_1, 10 = color_2, 11	= color_3
+                            // 00 = color0, 01 = color1, 10 = color_2, 11	= color_3
                             // These 2-bit codes correspond to the 2-bit fields
                             // stored in the 64-bit block.
                             colours[2].blue = (byte)((2 * colours[0].blue + colours[1].blue + 1) / 3);
@@ -751,21 +742,23 @@ namespace Kn5Materials {
                             colours[3].red = (byte)((colours[0].red + 2 * colours[1].red + 1) / 3);
                             colours[3].alpha = 0xFF;
 
+                            uint offset;
+                            int i;
+                            int j;
+                            int k;
                             for (j = 0, k = 0; j < 4; j++) {
                                 for (i = 0; i < 4; k++, i++) {
-                                    select = (int)((bitmask & (0x03 << k * 2)) >> k * 2);
-
-                                    if (((x + i) < width) && ((y + j) < height)) {
-                                        offset = (uint)(z * sizeofplane + (y + j) * bps + (x + i) * bpp);
-                                        rawData[offset + 0] = (byte)colours[select].red;
-                                        rawData[offset + 1] = (byte)colours[select].green;
-                                        rawData[offset + 2] = (byte)colours[select].blue;
-                                    }
+                                    var select = (int)((bitmask & (0x03 << k * 2)) >> k * 2);
+                                    if (((x + i) >= width) || ((y + j) >= height)) continue;
+                                    offset = (uint)(z * sizeofplane + (y + j) * bps + (x + i) * bpp);
+                                    rawData[offset + 0] = colours[@select].red;
+                                    rawData[offset + 1] = colours[@select].green;
+                                    rawData[offset + 2] = colours[@select].blue;
                                 }
                             }
 
                             for (j = 0; j < 4; j++) {
-                                word = (ushort)(alpha[2 * j] | (alpha[2 * j + 1] << 8)); //(alpha[2 * j] + 256 * alpha[2 * j + 1]);
+                                var word = (ushort)(alpha[2 * j] | (alpha[2 * j + 1] << 8));
                                 for (i = 0; i < 4; i++) {
                                     if (((x + i) < width) && ((y + j) < height)) {
                                         offset = (uint)(z * sizeofplane + (y + j) * bps + (x + i) * bpp + 3);
@@ -784,13 +777,13 @@ namespace Kn5Materials {
 
         private byte[] DecompressDXT4(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             // allocate bitmap
-            int width = (int)header.width;
-            int height = (int)header.height;
-            int depth = (int)header.depth;
+            var width = (int)header.width;
+            var height = (int)header.height;
+            var depth = (int)header.depth;
 
             // Can do color & alpha same as dxt5, but color is pre-multiplied
             // so the result will be wrong unless corrected.
-            byte[] rawData = DecompressDXT5(header, data, pixelFormat);
+            var rawData = DecompressDXT5(header, data, pixelFormat);
             CorrectPremult((uint)(width * height * depth), ref rawData);
 
             return rawData;
@@ -798,42 +791,39 @@ namespace Kn5Materials {
 
         private unsafe byte[] DecompressDXT5(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             // allocate bitmap
-            int bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
-            int bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
-            int sizeofplane = (int)(bps * header.height);
-            int width = (int)header.width;
-            int height = (int)header.height;
-            int depth = (int)header.depth;
+            var bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
+            var bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
+            var sizeofplane = (int)(bps * header.height);
+            var width = (int)header.width;
+            var height = (int)header.height;
+            var depth = (int)header.depth;
 
-            Colour8888[] colours = new Colour8888[4];
-            Colour8888 col;
-            byte[] rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
-
-            uint bitmask, offset;
-            int i, j, k, x, y, z, select;
-            ushort bits;
-            ushort[] alphas = new ushort[8];
-            byte* alphamask;
+            var colours = new Colour8888[4];
+            var rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
+            var alphas = new ushort[8];
 
             fixed (byte* bytePtr = data) {
-                byte* temp = bytePtr;
+                var temp = bytePtr;
+                int z;
                 for (z = 0; z < depth; z++) {
+                    int y;
                     for (y = 0; y < height; y += 4) {
+                        int x;
                         for (x = 0; x < width; x += 4) {
                             if (y >= height || x >= width)
                                 break;
 
                             alphas[0] = temp[0];
                             alphas[1] = temp[1];
-                            alphamask = (temp + 2);
+                            var alphamask = (temp + 2);
                             temp += 8;
 
                             DxtcReadColors(temp, ref colours);
-                            bitmask = ((uint*)temp)[1];
+                            var bitmask = ((uint*)temp)[1];
                             temp += 8;
 
                             // Four-color block: derive the other two colors.
-                            // 00 = color_0, 01 = color_1, 10 = color_2, 11	= color_3
+                            // 00 = color0, 01 = color1, 10 = color_2, 11	= color_3
                             // These 2-bit codes correspond to the 2-bit fields
                             // stored in the 64-bit block.
                             colours[2].blue = (byte)((2 * colours[0].blue + colours[1].blue + 1) / 3);
@@ -846,17 +836,20 @@ namespace Kn5Materials {
                             colours[3].red = (byte)((colours[0].red + 2 * colours[1].red + 1) / 3);
                             //colours[3].alpha = 0xFF;
 
-                            k = 0;
+                            var k = 0;
+                            uint offset;
+                            int i;
+                            int j;
                             for (j = 0; j < 4; j++) {
                                 for (i = 0; i < 4; k++, i++) {
-                                    select = (int)((bitmask & (0x03 << k * 2)) >> k * 2);
-                                    col = colours[select];
+                                    var select = (int)((bitmask & (0x03 << k * 2)) >> k * 2);
+                                    var col = colours[@select];
                                     // only put pixels out < width or height
                                     if (((x + i) < width) && ((y + j) < height)) {
                                         offset = (uint)(z * sizeofplane + (y + j) * bps + (x + i) * bpp);
-                                        rawData[offset] = (byte)col.red;
-                                        rawData[offset + 1] = (byte)col.green;
-                                        rawData[offset + 2] = (byte)col.blue;
+                                        rawData[offset] = col.red;
+                                        rawData[offset + 1] = col.green;
+                                        rawData[offset + 2] = col.blue;
                                     }
                                 }
                             }
@@ -886,7 +879,7 @@ namespace Kn5Materials {
                             // it operates on a 6-byte system.
 
                             // First three bytes
-                            bits = (ushort)((alphamask[0]) | (alphamask[1] << 8) | (alphamask[2] << 16));
+                            var bits = (ushort)((alphamask[0]) | (alphamask[1] << 8) | (alphamask[2] << 16));
                             for (j = 0; j < 2; j++) {
                                 for (i = 0; i < 4; i++) {
                                     // only put pixels out < width or height
@@ -920,32 +913,32 @@ namespace Kn5Materials {
 
         private unsafe byte[] DecompressRGB(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             // allocate bitmap
-            int bpp = (int)(this.PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
-            int bps = (int)(header.width * bpp * this.PixelFormatToBpc(pixelFormat));
-            int sizeofplane = (int)(bps * header.height);
-            int width = (int)header.width;
-            int height = (int)header.height;
-            int depth = (int)header.depth;
+            var bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
+            var bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
+            var sizeofplane = (int)(bps * header.height);
+            var width = (int)header.width;
+            var height = (int)header.height;
+            var depth = (int)header.depth;
 
-            byte[] rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
+            var rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
 
-            uint valMask = (uint)((1 << (int)header.pixelformat.rgbbitcount) - 1);
-            uint pixSize = (uint)(((int)header.pixelformat.rgbbitcount + 7) / 8);
-            int rShift1 = 0; int rMul = 0; int rShift2 = 0;
+            var valMask = (uint)((1 << (int)header.pixelformat.rgbbitcount) - 1);
+            var pixSize = (uint)(((int)header.pixelformat.rgbbitcount + 7) / 8);
+            var rShift1 = 0; var rMul = 0; var rShift2 = 0;
             ComputeMaskParams(header.pixelformat.rbitmask, ref rShift1, ref rMul, ref rShift2);
-            int gShift1 = 0; int gMul = 0; int gShift2 = 0;
+            var gShift1 = 0; var gMul = 0; var gShift2 = 0;
             ComputeMaskParams(header.pixelformat.gbitmask, ref gShift1, ref gMul, ref gShift2);
-            int bShift1 = 0; int bMul = 0; int bShift2 = 0;
+            var bShift1 = 0; var bMul = 0; var bShift2 = 0;
             ComputeMaskParams(header.pixelformat.bbitmask, ref bShift1, ref bMul, ref bShift2);
 
-            int offset = 0;
-            int pixnum = width * height * depth;
+            var offset = 0;
+            var pixnum = width * height * depth;
             fixed (byte* bytePtr = data) {
-                byte* temp = bytePtr;
+                var temp = bytePtr;
                 while (pixnum-- > 0) {
-                    uint px = *((uint*)temp) & valMask;
+                    var px = *((uint*)temp) & valMask;
                     temp += pixSize;
-                    uint pxc = px & header.pixelformat.rbitmask;
+                    var pxc = px & header.pixelformat.rbitmask;
                     rawData[offset] = (byte)(((pxc >> rShift1) * rMul) >> rShift2);
                     pxc = px & header.pixelformat.gbitmask;
                     rawData[offset + 1] = (byte)(((pxc >> gShift1) * gMul) >> gShift2);
@@ -960,36 +953,36 @@ namespace Kn5Materials {
 
         private unsafe byte[] DecompressRGBA(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             // allocate bitmap
-            int bpp = (int)(this.PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
-            int bps = (int)(header.width * bpp * this.PixelFormatToBpc(pixelFormat));
-            int sizeofplane = (int)(bps * header.height);
-            int width = (int)header.width;
-            int height = (int)header.height;
-            int depth = (int)header.depth;
+            var bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
+            var bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
+            var sizeofplane = (int)(bps * header.height);
+            var width = (int)header.width;
+            var height = (int)header.height;
+            var depth = (int)header.depth;
 
-            byte[] rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
+            var rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
 
-            uint valMask = (uint)((header.pixelformat.rgbbitcount == 32) ? ~0 : (1 << (int)header.pixelformat.rgbbitcount) - 1);
+            var valMask = (uint)((header.pixelformat.rgbbitcount == 32) ? ~0 : (1 << (int)header.pixelformat.rgbbitcount) - 1);
             // Funny x86s, make 1 << 32 == 1
-            uint pixSize = (header.pixelformat.rgbbitcount + 7) / 8;
-            int rShift1 = 0; int rMul = 0; int rShift2 = 0;
+            var pixSize = (header.pixelformat.rgbbitcount + 7) / 8;
+            var rShift1 = 0; var rMul = 0; var rShift2 = 0;
             ComputeMaskParams(header.pixelformat.rbitmask, ref rShift1, ref rMul, ref rShift2);
-            int gShift1 = 0; int gMul = 0; int gShift2 = 0;
+            var gShift1 = 0; var gMul = 0; var gShift2 = 0;
             ComputeMaskParams(header.pixelformat.gbitmask, ref gShift1, ref gMul, ref gShift2);
-            int bShift1 = 0; int bMul = 0; int bShift2 = 0;
+            var bShift1 = 0; var bMul = 0; var bShift2 = 0;
             ComputeMaskParams(header.pixelformat.bbitmask, ref bShift1, ref bMul, ref bShift2);
-            int aShift1 = 0; int aMul = 0; int aShift2 = 0;
+            var aShift1 = 0; var aMul = 0; var aShift2 = 0;
             ComputeMaskParams(header.pixelformat.alphabitmask, ref aShift1, ref aMul, ref aShift2);
 
-            int offset = 0;
-            int pixnum = width * height * depth;
+            var offset = 0;
+            var pixnum = width * height * depth;
             fixed (byte* bytePtr = data) {
-                byte* temp = bytePtr;
+                var temp = bytePtr;
 
                 while (pixnum-- > 0) {
-                    uint px = *((uint*)temp) & valMask;
+                    var px = *((uint*)temp) & valMask;
                     temp += pixSize;
-                    uint pxc = px & header.pixelformat.rbitmask;
+                    var pxc = px & header.pixelformat.rbitmask;
                     rawData[offset] = (byte)(((pxc >> rShift1) * rMul) >> rShift2);
                     pxc = px & header.pixelformat.gbitmask;
                     rawData[offset + 1] = (byte)(((pxc >> gShift1) * gMul) >> gShift2);
@@ -1005,34 +998,32 @@ namespace Kn5Materials {
 
         private unsafe byte[] Decompress3Dc(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             // allocate bitmap
-            int bpp = (int)(this.PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
-            int bps = (int)(header.width * bpp * this.PixelFormatToBpc(pixelFormat));
-            int sizeofplane = (int)(bps * header.height);
-            int width = (int)header.width;
-            int height = (int)header.height;
-            int depth = (int)header.depth;
+            var bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
+            var bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
+            var sizeofplane = (int)(bps * header.height);
+            var width = (int)header.width;
+            var height = (int)header.height;
+            var depth = (int)header.depth;
 
-            byte[] rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
+            var rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
 
-            uint bitmask, bitmask2;
-            int offset, currentOffset;
-            int x, y, z, i, j, k, t1, t2;
-            byte* temp2;
-            byte[] yColours = new byte[8];
-            byte[] xColours = new byte[8];
+            var yColours = new byte[8];
+            var xColours = new byte[8];
 
-            offset = 0;
+            var offset = 0;
             fixed (byte* bytePtr = data) {
-                byte* temp = bytePtr;
-                for (z = 0; z < depth; z++) {
-                    for (y = 0; y < height; y += 4) {
+                var temp = bytePtr;
+                for (var z = 0; z < depth; z++) {
+                    for (var y = 0; y < height; y += 4) {
+                        int x;
                         for (x = 0; x < width; x += 4) {
-                            temp2 = temp + 8;
+                            var temp2 = temp + 8;
 
                             //Read Y palette
-                            t1 = yColours[0] = temp[0];
-                            t2 = yColours[1] = temp[1];
+                            int t1 = yColours[0] = temp[0];
+                            int t2 = yColours[1] = temp[1];
                             temp += 2;
+                            int i;
                             if (t1 > t2)
                                 for (i = 2; i < 8; ++i)
                                     yColours[i] = (byte)(t1 + ((t2 - t1) * (i - 1)) / 7);
@@ -1058,11 +1049,13 @@ namespace Kn5Materials {
                             }
 
                             //decompress pixel data
-                            currentOffset = offset;
+                            var currentOffset = offset;
+                            int k;
                             for (k = 0; k < 4; k += 2) {
                                 // First three bytes
-                                bitmask = ((uint)(temp[0]) << 0) | ((uint)(temp[1]) << 8) | ((uint)(temp[2]) << 16);
-                                bitmask2 = ((uint)(temp2[0]) << 0) | ((uint)(temp2[1]) << 8) | ((uint)(temp2[2]) << 16);
+                                var bitmask = ((uint)(temp[0]) << 0) | ((uint)(temp[1]) << 8) | ((uint)(temp[2]) << 16);
+                                var bitmask2 = ((uint)(temp2[0]) << 0) | ((uint)(temp2[1]) << 8) | ((uint)(temp2[2]) << 16);
+                                int j;
                                 for (j = 0; j < 2; j++) {
                                     // only put pixels out < height
                                     if ((y + k + j) < height) {
@@ -1106,22 +1099,22 @@ namespace Kn5Materials {
 
         private unsafe byte[] DecompressAti1n(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             // allocate bitmap
-            int bpp = (int)(this.PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
-            int bps = (int)(header.width * bpp * this.PixelFormatToBpc(pixelFormat));
-            int sizeofplane = (int)(bps * header.height);
-            int width = (int)header.width;
-            int height = (int)header.height;
-            int depth = (int)header.depth;
+            var bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
+            var bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
+            var sizeofplane = (int)(bps * header.height);
+            var width = (int)header.width;
+            var height = (int)header.height;
+            var depth = (int)header.depth;
 
-            byte[] rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
+            var rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
 
             uint bitmask, offset, currOffset;
             int i, j, k, x, y, z, t1, t2;
-            byte[] colours = new byte[8];
+            var colours = new byte[8];
 
             offset = 0;
             fixed (byte* bytePtr = data) {
-                byte* temp = bytePtr;
+                var temp = bytePtr;
                 for (z = 0; z < depth; z++) {
                     for (y = 0; y < height; y += 4) {
                         for (x = 0; x < width; x += 4) {
@@ -1170,24 +1163,24 @@ namespace Kn5Materials {
 
         private unsafe byte[] DecompressLum(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             // allocate bitmap
-            int bpp = (int)(this.PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
-            int bps = (int)(header.width * bpp * this.PixelFormatToBpc(pixelFormat));
-            int sizeofplane = (int)(bps * header.height);
-            int width = (int)header.width;
-            int height = (int)header.height;
-            int depth = (int)header.depth;
+            var bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
+            var bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
+            var sizeofplane = (int)(bps * header.height);
+            var width = (int)header.width;
+            var height = (int)header.height;
+            var depth = (int)header.depth;
 
-            byte[] rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
+            var rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
 
-            int lShift1 = 0; int lMul = 0; int lShift2 = 0;
+            var lShift1 = 0; var lMul = 0; var lShift2 = 0;
             ComputeMaskParams(header.pixelformat.rbitmask, ref lShift1, ref lMul, ref lShift2);
 
-            int offset = 0;
-            int pixnum = width * height * depth;
+            var offset = 0;
+            var pixnum = width * height * depth;
             fixed (byte* bytePtr = data) {
-                byte* temp = bytePtr;
+                var temp = bytePtr;
                 while (pixnum-- > 0) {
-                    byte px = *(temp++);
+                    var px = *(temp++);
                     rawData[offset] = (byte)(((px >> lShift1) * lMul) >> lShift2);
                     rawData[offset + 1] = (byte)(((px >> lShift1) * lMul) >> lShift2);
                     rawData[offset + 2] = (byte)(((px >> lShift1) * lMul) >> lShift2);
@@ -1200,27 +1193,27 @@ namespace Kn5Materials {
 
         private unsafe byte[] DecompressRXGB(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             // allocate bitmap
-            int bpp = (int)(this.PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
-            int bps = (int)(header.width * bpp * this.PixelFormatToBpc(pixelFormat));
-            int sizeofplane = (int)(bps * header.height);
-            int width = (int)header.width;
-            int height = (int)header.height;
-            int depth = (int)header.depth;
+            var bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
+            var bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
+            var sizeofplane = (int)(bps * header.height);
+            var width = (int)header.width;
+            var height = (int)header.height;
+            var depth = (int)header.depth;
 
-            byte[] rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
+            var rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
 
             int x, y, z, i, j, k, select;
-            Colour565 color_0 = new Colour565();
-            Colour565 color_1 = new Colour565();
+            var color_0 = new Colour565();
+            var color_1 = new Colour565();
             Colour8888 col;
-            Colour8888[] colours = new Colour8888[4];
+            var colours = new Colour8888[4];
             uint bitmask, offset;
-            byte[] alphas = new byte[8];
+            var alphas = new byte[8];
             byte* alphamask;
             uint bits;
 
             fixed (byte* bytePtr = data) {
-                byte* temp = bytePtr;
+                var temp = bytePtr;
 
                 for (z = 0; z < depth; z++) {
                     for (y = 0; y < height; y += 4) {
@@ -1249,7 +1242,7 @@ namespace Kn5Materials {
                             colours[1].alpha = 0xFF;
 
                             // Four-color block: derive the other two colors.    
-                            // 00 = color_0, 01 = color_1, 10 = color_2, 11 = color_3
+                            // 00 = color0, 01 = color1, 10 = color_2, 11 = color_3
                             // These 2-bit codes correspond to the 2-bit fields 
                             // stored in the 64-bit block.
                             colours[2].blue = (byte)((2 * colours[0].blue + colours[1].blue + 1) / 3);
@@ -1335,19 +1328,19 @@ namespace Kn5Materials {
 
         private unsafe byte[] DecompressFloat(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             // allocate bitmap
-            int bpp = (int)(this.PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
-            int bps = (int)(header.width * bpp * this.PixelFormatToBpc(pixelFormat));
-            int sizeofplane = (int)(bps * header.height);
-            int width = (int)header.width;
-            int height = (int)header.height;
-            int depth = (int)header.depth;
+            var bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
+            var bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
+            var sizeofplane = (int)(bps * header.height);
+            var width = (int)header.width;
+            var height = (int)header.height;
+            var depth = (int)header.depth;
 
-            byte[] rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
+            var rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
             int i, j, size;
             fixed (byte* bytePtr = data) {
-                byte* temp = bytePtr;
+                var temp = bytePtr;
                 fixed (byte* destPtr = rawData) {
-                    byte* destData = destPtr;
+                    var destData = destPtr;
                     switch (pixelFormat) {
                         case PixelFormat.R32F:  // Red float, green = blue = max
                             size = width * height * depth * 3;
@@ -1397,18 +1390,18 @@ namespace Kn5Materials {
 
         private unsafe byte[] DecompressARGB(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             // allocate bitmap
-            int bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
-            int bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
-            int sizeofplane = (int)(bps * header.height);
-            int width = (int)header.width;
-            int height = (int)header.height;
-            int depth = (int)header.depth;
+            var bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
+            var bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
+            var sizeofplane = (int)(bps * header.height);
+            var width = (int)header.width;
+            var height = (int)header.height;
+            var depth = (int)header.depth;
 
             if (Check16BitComponents(header))
                 return DecompressARGB16(header, data, pixelFormat);
 
-            int sizeOfData = (int)((header.width * header.pixelformat.rgbbitcount / 8) * header.height * header.depth);
-            byte[] rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
+            var sizeOfData = (int)((header.width * header.pixelformat.rgbbitcount / 8) * header.height * header.depth);
+            var rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
 
             if ((pixelFormat == PixelFormat.LUMINANCE) && (header.pixelformat.rgbbitcount == 16) && (header.pixelformat.rbitmask == 0xFFFF)) {
                 Array.Copy(data, rawData, data.Length);
@@ -1429,7 +1422,7 @@ namespace Kn5Materials {
             tempBpp = header.pixelformat.rgbbitcount / 8;
 
             fixed (byte* bytePtr = data) {
-                byte* temp = bytePtr;
+                var temp = bytePtr;
 
                 for (i = 0; i < sizeOfData; i += bpp) {
                     //@TODO: This is SLOOOW...
@@ -1442,7 +1435,7 @@ namespace Kn5Materials {
                             //this branch is extra-SLOOOW
                             readI = (uint)(*temp | ((*(temp + 1)) << 8) | ((*(temp + 2)) << 16));
                         } else if (tempBpp == 1)
-                            readI = *((byte*)temp);
+                            readI = *temp;
                         else if (tempBpp == 2)
                             readI = (uint)(temp[0] | (temp[1] << 8));
                     } else
@@ -1478,15 +1471,15 @@ namespace Kn5Materials {
 
         private unsafe byte[] DecompressARGB16(DDSStruct header, byte[] data, PixelFormat pixelFormat) {
             // allocate bitmap
-            int bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
-            int bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
-            int sizeofplane = (int)(bps * header.height);
-            int width = (int)header.width;
-            int height = (int)header.height;
-            int depth = (int)header.depth;
+            var bpp = (int)(PixelFormatToBpp(pixelFormat, header.pixelformat.rgbbitcount));
+            var bps = (int)(header.width * bpp * PixelFormatToBpc(pixelFormat));
+            var sizeofplane = (int)(bps * header.height);
+            var width = (int)header.width;
+            var height = (int)header.height;
+            var depth = (int)header.depth;
 
-            int sizeOfData = (int)((header.width * header.pixelformat.rgbbitcount / 8) * header.height * header.depth);
-            byte[] rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
+            var sizeOfData = (int)((header.width * header.pixelformat.rgbbitcount / 8) * header.height * header.depth);
+            var rawData = new byte[depth * sizeofplane + height * bps + width * bpp];
 
             uint readI = 0, tempBpp = 0;
             int i;
@@ -1512,9 +1505,9 @@ namespace Kn5Materials {
 
             tempBpp = header.pixelformat.rgbbitcount / 8;
             fixed (byte* bytePtr = data) {
-                byte* temp = bytePtr;
+                var temp = bytePtr;
                 fixed (byte* destPtr = rawData) {
-                    byte* destData = destPtr;
+                    var destData = destPtr;
                     for (i = 0; i < sizeOfData / 2; i += bpp) {
                         //@TODO: This is SLOOOW...
                         //but the old version crashed in release build under
@@ -1526,7 +1519,7 @@ namespace Kn5Materials {
                                 //this branch is extra-SLOOOW
                                 readI = (uint)(*temp | ((*(temp + 1)) << 8) | ((*(temp + 2)) << 16));
                             } else if (tempBpp == 1)
-                                readI = *((byte*)temp);
+                                readI = *temp;
                             else if (tempBpp == 2)
                                 readI = (uint)(temp[0] | (temp[1] << 8));
                         } else
@@ -1570,8 +1563,8 @@ namespace Kn5Materials {
         /// <summary>
         /// Returns a System.Imaging.Bitmap containing the DDS image.
         /// </summary>
-        public System.Drawing.Bitmap Bitmap {
-            get { return this.m_bitmap; }
+        public Bitmap Bitmap {
+            get { return _bitmap; }
         }
         #endregion
 
