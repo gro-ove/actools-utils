@@ -67,12 +67,6 @@ Kn5Unpack/*
 *.suo
 
 # Specific unnecessary source files
-AcManager/Assets/Data/ShowroomPreviewSphere/*
-AcManager/Assets/Data/TrackPreviewNothing/*
-AcTools.marker.tss
-AcTools.tss
-
-# RAM Disk trick
-*/bin~
-*/obj~
+*.tss
 *.tmp_proj
+.idea/*

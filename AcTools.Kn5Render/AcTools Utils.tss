@@ -1,8 +1,0 @@
-<?xml version="1.0"?>
-<ArrayOfArrayOfArrayOfString xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <ArrayOfArrayOfString>
-    <ArrayOfString>
-      <string>D:\Development\GitHub\actools-utils\Kn5Unpack\Program.cs</string>
-    </ArrayOfString>
-  </ArrayOfArrayOfString>
-</ArrayOfArrayOfArrayOfString>
